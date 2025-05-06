@@ -1,0 +1,14 @@
+name: Deploy Workflow
+
+on: [push]
+
+jobs:
+  dummy_job:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - name: Deploy Step
+      run: |
+        echo "Hello from my GitHub Action!"
+        echo "This workflow ran on $(date)"
