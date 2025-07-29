@@ -8,7 +8,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: Host(`%project.projectId%.mia-platform.eu`)
+    - match: Host(`%project.projectId%.mia-demo-re5gu6.gcp.mia-platform.eu`)
       middlewares:
         - name: "ingress-controller-hsts-headers"
           namespace: mia-platform
