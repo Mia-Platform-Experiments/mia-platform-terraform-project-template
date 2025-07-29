@@ -44,7 +44,6 @@ jobs:
           tee /tmp/ca.pem > /dev/null << EOF
           ${KUBE_CA_PEM}
           EOF
-          cat /tmp/ca.pem
           mkdir ${DESTINATION_PATH}
           test -f "${VARIABLES_FILE}" && set -a && source "${VARIABLES_FILE}"
           test -f "${GENERATE_FILE}" && mlp generate -c "${GENERATE_FILE}" -e "${ENVIRONMENT_PREFIX}" -e "${ENVIRONMENT_VARIABLES_PREFIX}" -o "${OVERLAY_PATH}"
