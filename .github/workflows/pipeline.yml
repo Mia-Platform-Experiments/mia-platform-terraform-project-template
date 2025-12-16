@@ -97,7 +97,7 @@ jobs:
           
           for VARS_FILE in $VARS_FILES; do
             BASENAME=$(basename "$VARS_FILE")
-            MODULE_NAME="${BASENAME%.variables.tf}"
+            MODULE_NAME="${BASENAME%%.variables.tf}"
             
             echo ""
             echo "Processing module: $MODULE_NAME"
