@@ -26,12 +26,18 @@ jobs:
           TERRAFORM_VERSION: 1.14.2
           TERRAFORM_WORK_DIR: ${{ github.workspace }}/terraform-work
           MODULES_BASE_DIR: ${{ github.workspace }}/manifests/terraform/environments/${{ github.event.deployment.environment }}
+          PROJECT_NAME: "%project.name%"
         run: |
           echo "==> Installing Git"
           apk add --no-cache git
           
           echo "==> Configuring Git credentials for GitHub"
           git config --global url."https://x-access-token:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
+          
+          echo "==> Calculating workspace name from project name"
+          WORKSPACE_NAME=$(echo "${PROJECT_NAME}" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+          echo "Project name: ${PROJECT_NAME}"
+          echo "Workspace name: ${WORKSPACE_NAME}"
           
           echo "==> Installing Terraform CLI ${TERRAFORM_VERSION}"
           wget -q https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip
@@ -70,12 +76,12 @@ jobs:
           cd ${TERRAFORM_WORK_DIR}
           
           echo "==> Generating main.tf header with HCP Terraform configuration"
-          cat > main.tf << 'TFEOF'
+          cat > main.tf << TFEOF
           terraform {
             cloud {
               organization = "mia-platform"
               workspaces {
-                name = "hcp-terraform-demo"
+                name = "${WORKSPACE_NAME}"
               }
             }
             required_providers {
