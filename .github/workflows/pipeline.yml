@@ -28,8 +28,8 @@ jobs:
           MODULES_BASE_DIR: ${{ github.workspace }}/manifests/terraform/environments/${{ github.event.deployment.environment }}
           PROJECT_NAME: "%project.name%"
         run: |
-          echo "==> Installing Git"
-          apk add --no-cache git
+          echo "==> Installing Git and jq"
+          apk add --quiet --no-cache git jq
           
           echo "==> Configuring Git credentials for GitHub"
           git config --global url."https://x-access-token:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
@@ -98,8 +98,8 @@ jobs:
           TFEOF
           
           echo "==> Processing module configurations and generating module blocks"
-          # Track app-service modules for deployment output
-          APP_SERVICE_MODULES=""
+          # Initialize deployments JSON object
+          DEPLOYMENTS_JSON="{}"
           
           for VARS_FILE in $VARS_FILES; do
             BASENAME=$(basename "$VARS_FILE")
@@ -110,9 +110,10 @@ jobs:
             echo "  Source file: $VARS_FILE"
             
             # Check if this is an app-service module based on folder path
+            IS_APP_SERVICE=false
             if echo "$VARS_FILE" | grep -q '/app-service/'; then
               echo "  Type: app-service (will be included in deployments)"
-              APP_SERVICE_MODULES="$APP_SERVICE_MODULES $MODULE_NAME"
+              IS_APP_SERVICE=true
             else
               echo "  Type: infrastructure-only (no code deployment)"
             fi
@@ -142,6 +143,24 @@ jobs:
             cd "${CONSOLE_DIR}"
             MODULE_SOURCE=$(echo "var.${MODULE_NAME}__module_source" | terraform console 2>&1 | tee /dev/stderr | tail -1 | tr -d '"')
             CONSOLE_EXIT=$?
+
+            # Extract deployment info if app-service
+            if [ "$IS_APP_SERVICE" = true ]; then
+               echo "  Extracting deployment variables..."
+               SERVICE_NAME=$(echo "var.${MODULE_NAME}_service_name" | terraform console 2>&1 | tee /dev/stderr | tail -1 | tr -d '"')
+               DEPLOYED_SERVICE=$(echo "var.${MODULE_NAME}_deployed_service" | terraform console 2>&1 | tee /dev/stderr | tail -1 | tr -d '"')
+               
+               WEBAPP_NAME="app-${SERVICE_NAME}"
+               
+               echo "  Detected App Service configuration:"
+               echo "    Service Name: ${SERVICE_NAME}"
+               echo "    Deployed Service: ${DEPLOYED_SERVICE}"
+               echo "    Calculated WebApp Name: ${WEBAPP_NAME}"
+               
+               # Update DEPLOYMENTS_JSON
+               DEPLOYMENTS_JSON=$(echo "$DEPLOYMENTS_JSON" | jq --arg mod "$MODULE_NAME" --arg web "$WEBAPP_NAME" --arg svc "$DEPLOYED_SERVICE" '. + {($mod): {webapp_name: $web, deployed_service: $svc}}')
+            fi
+
             cd - > /dev/null
             echo "  Debug: terraform console exit code: ${CONSOLE_EXIT}"
             echo "  Debug: Extracted value: '${MODULE_SOURCE}'"
@@ -170,29 +189,11 @@ jobs:
             echo "}" >> main.tf
           done
           
-          # Generate deployment output for app-service modules only
-          echo ""
-          echo "==> Generating deployment output for app-service modules"
-          echo "" >> main.tf
-          echo "# Output deployment mapping for CD pipeline" >> main.tf
-          echo "output \"deployments\" {" >> main.tf
-          echo "  description = \"Deployment information for app-service modules\"" >> main.tf
-          echo "  value = {" >> main.tf
-          
-          if [ -n "$APP_SERVICE_MODULES" ]; then
-            for MODULE_NAME in $APP_SERVICE_MODULES; do
-              echo "  Including ${MODULE_NAME} in deployments"
-              echo "    ${MODULE_NAME} = {" >> main.tf
-              echo "      webapp_name      = module.${MODULE_NAME}.webapp_name" >> main.tf
-              echo "      deployed_service = module.${MODULE_NAME}.deployed_service" >> main.tf
-              echo "    }" >> main.tf
-            done
-          else
-            echo "  No app-service modules found"
-          fi
-          
-          echo "  }" >> main.tf
-          echo "}" >> main.tf
+          # Save deployments.json
+          echo "==> Saving deployment configuration"
+          echo "{\"deployments\": {\"value\": $DEPLOYMENTS_JSON}}" > "${TERRAFORM_WORK_DIR}/deployments.json"
+          echo "Generated deployments.json:"
+          cat "${TERRAFORM_WORK_DIR}/deployments.json"
           
           echo ""
           echo "==> Generated main.tf content:"
@@ -205,11 +206,6 @@ jobs:
           echo ""
           echo "==> Applying infrastructure changes (plan runs automatically in HCP Terraform)"
           terraform apply -auto-approve
-          
-          echo ""
-          echo "==> Generating deployment outputs for next step"
-          terraform output -json > ${TERRAFORM_WORK_DIR}/deployments.json
-          cat ${TERRAFORM_WORK_DIR}/deployments.json
       - name: Commit generated Terraform files
         if: success()
         env:
@@ -246,7 +242,7 @@ jobs:
           git push origin "${GITHUB_REF_NAME}"
       - name: Install Azure CLI
         run: |
-          apk add --no-cache python3 py3-pip gcc musl-dev python3-dev libffi-dev openssl-dev cargo make
+          apk add --quiet --no-cache python3 py3-pip gcc musl-dev python3-dev libffi-dev openssl-dev cargo make
           pip3 install --break-system-packages --no-cache-dir azure-cli
       - name: Azure Login
         uses: azure/login@v2
@@ -260,7 +256,7 @@ jobs:
           RESOURCE_GROUP: terraform-demo
         run: |
           echo "==> Installing dependencies"
-          apk add --no-cache jq
+          apk add --quiet --no-cache jq
           
           echo "==> Reading deployment configuration"
           DEPLOYMENTS_FILE="${TERRAFORM_WORK_DIR}/deployments.json"
