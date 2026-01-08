@@ -27,6 +27,7 @@ jobs:
           TERRAFORM_WORK_DIR: ${{ github.workspace }}/terraform-work
           MODULES_BASE_DIR: ${{ github.workspace }}/manifests/terraform/environments/${{ github.event.deployment.environment }}
           PROJECT_NAME: "%project.name%"
+          ENVIRONMENT: ${{ github.event.deployment.environment }}
         run: |
           echo "==> Installing Git and jq"
           apk add --quiet --no-cache git jq
@@ -34,9 +35,12 @@ jobs:
           echo "==> Configuring Git credentials for GitHub"
           git config --global url."https://x-access-token:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
           
-          echo "==> Calculating workspace name from project name"
-          WORKSPACE_NAME=$(echo "${PROJECT_NAME}" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+          echo "==> Calculating workspace name from project name and environment"
+          APP_NAME=$(echo "${PROJECT_NAME}" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+          ENV_LOWER=$(echo "${ENVIRONMENT}" | tr '[:upper:]' '[:lower:]')
+          WORKSPACE_NAME="mia-${APP_NAME}-main-${ENV_LOWER}"
           echo "Project name: ${PROJECT_NAME}"
+          echo "Environment: ${ENVIRONMENT}"
           echo "Workspace name: ${WORKSPACE_NAME}"
           
           echo "==> Installing Terraform CLI ${TERRAFORM_VERSION}"
